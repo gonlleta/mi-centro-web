@@ -477,6 +477,221 @@ window.renderStockView = function renderStockView(state, helpers) {
   `;
 };
 
+window.renderNotificationsView = function renderNotificationsView(state, helpers) {
+  const perm =
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+  const permClass =
+    perm === 'granted' ? 'is-granted' : perm === 'denied' ? 'is-denied' : '';
+  const permTitle =
+    perm === 'granted'
+      ? 'Notificaciones del dispositivo activadas'
+      : perm === 'denied'
+      ? 'Notificaciones bloqueadas en el navegador'
+      : perm === 'unsupported'
+      ? 'Tu navegador solo soporta notificaciones dentro de la página'
+      : 'Activá las notificaciones reales de Windows / Celular';
+  const permDesc =
+    perm === 'granted'
+      ? 'Cada envío saldrá como alerta real del sistema operativo + aviso en vivo dentro de cada tienda.'
+      : perm === 'denied'
+      ? 'Habilitalas desde el ícono del candado en la barra de direcciones; igual siguen funcionando dentro de la web.'
+      : 'Al permitirlo, cuando envíes un aviso saldrá como notificación real del navegador además de aparecer en la campana de cada tienda.';
+
+  const presets = [
+    {
+      label: '🔥 20% OFF Hoy',
+      type: 'Oferta',
+      title: '¡Solo por hoy: 20% OFF en toda la tienda!',
+      body: 'Aprovechá un 20% de descuento pagando por transferencia bancaria o Mercado Pago.'
+    },
+    {
+      label: '📦 ¡Volvió el stock!',
+      type: 'Stock',
+      title: '¡Volvieron los más pedidos!',
+      body: 'Acabamos de reponer stock en nuestros productos destacados. ¡Entrá antes de que se agoten!'
+    },
+    {
+      label: '✨ Nuevo ingreso',
+      type: 'Novedad',
+      title: 'Nueva colección disponible',
+      body: 'Ya podés ver los últimos ingresos de temporada con envío a todo el país.'
+    },
+    {
+      label: '🛵 Pedido en camino',
+      type: 'Pedido',
+      title: 'Tu pedido ya está en camino',
+      body: 'Acabamos de despachar tu compra. ¡Gracias por elegirnos!'
+    }
+  ];
+
+  const storeTargets = [
+    { id: 'all', label: 'Todas las tiendas' },
+    ...window.HUB_SECTIONS.map((s) => ({ id: s.id, label: `${s.brand} (${s.sectionName})` }))
+  ];
+
+  return `
+    <section class="stock-page">
+      <div class="stock-header">
+        <div>
+          <div class="hub-eyebrow">
+            <span class="hub-eyebrow-dot"></span>
+            <span>Alertas Push del Navegador + Campana en cada Tienda</span>
+          </div>
+          <h1 class="hub-title" style="margin-bottom:6px;">Notificaciones a Clientes</h1>
+          <p class="hub-subtitle">
+            Enviá promociones, avisos de reposición de stock o estados de pedido en vivo. También se envían solas cuando reponés un producto agotado o se confirma una compra.
+          </p>
+        </div>
+        ${
+          state.notifications.length > 0
+            ? '<button class="stock-btn" id="btn-clear-notifs">Limpiar historial</button>'
+            : ''
+        }
+      </div>
+
+      <div class="notif-perm-bar ${permClass}">
+        <div>
+          <strong style="display:block;font-size:0.94rem;margin-bottom:3px;">${permTitle}</strong>
+          <span style="font-size:0.82rem;color:#55544f;">${permDesc}</span>
+        </div>
+        ${
+          perm === 'default'
+            ? '<button class="stock-btn stock-btn-primary" id="btn-request-notif-perm">🔔 Activar notificaciones reales</button>'
+            : perm === 'granted'
+            ? '<span class="stock-status-pill is-ok">✓ Activas en este dispositivo</span>'
+            : ''
+        }
+      </div>
+
+      <div class="notif-grid">
+        <div class="notif-panel-card">
+          <h2 style="margin:0 0 6px;font-family:'Space Grotesk',sans-serif;font-size:1.28rem;">Enviar nueva notificación</h2>
+          <p style="margin:0 0 14px;font-size:0.84rem;color:#64635e;">Usá una plantilla rápida o escribí tu propio aviso para tus clientes.</p>
+
+          <div class="notif-presets">
+            ${presets
+              .map(
+                (p, idx) => `
+              <button type="button" class="notif-preset-chip" data-notif-preset="${idx}">
+                ${p.label}
+              </button>`
+              )
+              .join('')}
+          </div>
+
+          <form class="new-prod-form" id="notif-send-form">
+            <div class="new-prod-grid">
+              <div class="form-field">
+                <label for="nf-target">Destino</label>
+                <select id="nf-target">
+                  ${storeTargets
+                    .map(
+                      (t) =>
+                        `<option value="${t.id}" ${state.notifDraft.target === t.id ? 'selected' : ''}>${t.label}</option>`
+                    )
+                    .join('')}
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="nf-type">Tipo de aviso</label>
+                <select id="nf-type">
+                  ${['Oferta', 'Stock', 'Novedad', 'Pedido']
+                    .map(
+                      (tp) =>
+                        `<option value="${tp}" ${state.notifDraft.type === tp ? 'selected' : ''}>${tp}</option>`
+                    )
+                    .join('')}
+                </select>
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label for="nf-title">Título de la notificación</label>
+              <input
+                id="nf-title"
+                type="text"
+                required
+                placeholder="Ej: ¡20% OFF solo por hoy!"
+                value="${state.notifDraft.title.replace(/"/g, '&quot;')}"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="nf-body">Mensaje para el cliente</label>
+              <textarea id="nf-body" required placeholder="Escribí el detalle de la oferta o aviso...">${state.notifDraft.body}</textarea>
+            </div>
+
+            <button type="submit" class="btn-checkout">
+              🔔 Enviar notificación ahora
+            </button>
+          </form>
+        </div>
+
+        <div class="notif-panel-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;">
+            <h2 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:1.28rem;">Enviadas (${state.notifications.length})</h2>
+            <span style="font-size:0.78rem;color:#64635e;">Sincronizadas en vivo</span>
+          </div>
+
+          ${
+            state.notifications.length === 0
+              ? '<p style="text-align:center;padding:38px 14px;color:#64635e;font-size:0.88rem;">Todavía no enviaste notificaciones. Probá tocando una plantilla rápida a la izquierda.</p>'
+              : `<div class="notif-list">
+                  ${state.notifications
+                    .map((n) => {
+                      const sec = window.HUB_SECTIONS.find((s) => s.id === n.target);
+                      const targetLabel = sec ? sec.brand : 'Todas las tiendas';
+                      const typeCls = 't-' + (n.type || 'novedad').toLowerCase();
+                      return `
+                        <article class="notif-item">
+                          <div class="notif-item-top">
+                            <span>
+                              <span class="notif-type-tag ${typeCls}">${n.type}</span>
+                              <strong style="margin-left:6px;color:#161614;">${targetLabel}</strong>
+                            </span>
+                            <span>${n.dateLabel}</span>
+                          </div>
+                          <h4>${n.title}</h4>
+                          <p>${n.body}</p>
+                          <div class="notif-item-actions">
+                            <button class="stock-mini-btn" data-resend-notif="${n.id}">Reenviar aviso</button>
+                            <button class="stock-mini-btn is-danger" data-delete-notif="${n.id}">Borrar</button>
+                          </div>
+                        </article>
+                      `;
+                    })
+                    .join('')}
+                </div>`
+          }
+        </div>
+      </div>
+    </section>
+  `;
+};
+
+window.NOTIF_PRESETS = [
+  {
+    type: 'Oferta',
+    title: '¡Solo por hoy: 20% OFF en toda la tienda!',
+    body: 'Aprovechá un 20% de descuento pagando por transferencia bancaria o Mercado Pago.'
+  },
+  {
+    type: 'Stock',
+    title: '¡Volvieron los más pedidos!',
+    body: 'Acabamos de reponer stock en nuestros productos destacados. ¡Entrá antes de que se agoten!'
+  },
+  {
+    type: 'Novedad',
+    title: 'Nueva colección disponible',
+    body: 'Ya podés ver los últimos ingresos de temporada con envío a todo el país.'
+  },
+  {
+    type: 'Pedido',
+    title: 'Tu pedido ya está en camino',
+    body: 'Acabamos de despachar tu compra. ¡Gracias por elegirnos!'
+  }
+];
+
 window.renderContactRows = function renderContactRows(section) {
   const a = section.about;
   const waDigits = a.phone.replace(/\D/g, '');
@@ -583,6 +798,8 @@ window.renderTemplateView = function renderTemplateView(section, state, helpers)
     ? helpers.getSectionItems(section.id).find((i) => i.id === state.activeProductId)
     : null;
 
+  const unreadCount = helpers.getUnreadCount(section.id);
+
   const headerInner = `
     <div class="tpl-container">
       <div class="tpl-header">
@@ -595,6 +812,10 @@ window.renderTemplateView = function renderTemplateView(section, state, helpers)
         </div>
         <div class="tpl-header-actions">
           <button class="tpl-mobile-about-btn" data-scroll-info>Nosotros</button>
+          <button class="tpl-bell-btn" data-open-store-notifs="${section.id}" title="Notificaciones y alertas de ${section.brand}" aria-label="Notificaciones">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            ${unreadCount > 0 ? `<span class="tpl-bell-badge">${unreadCount}</span>` : ''}
+          </button>
           <button class="tpl-stock-btn" data-open-stock="${section.id}" title="Controlar stock de ${section.brand}">
             <span>Stock (${secStock.totalUnits})</span>
           </button>

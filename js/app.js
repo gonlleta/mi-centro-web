@@ -8,6 +8,8 @@
   const SALES_STORAGE_KEY = 'mi_centro_sales_v1';
   const PRICES_STORAGE_KEY = 'mi_centro_prices_v1';
   const CUSTOM_ITEMS_KEY = 'mi_centro_custom_items_v1';
+  const NOTIFS_STORAGE_KEY = 'mi_centro_notifs_v1';
+  const READ_NOTIFS_KEY = 'mi_centro_read_notifs_v1';
 
   const PAYMENT_METHODS = [
     'Mercado Pago',
@@ -76,10 +78,35 @@
     return Array.isArray(parsed) ? parsed : [];
   }
 
+  function buildDefaultNotifications() {
+    return [
+      {
+        id: 'notif_welcome_1',
+        target: 'all',
+        type: 'Oferta',
+        title: '¡Bienvenidos! 3 cuotas sin interés en toda la web',
+        body: 'Pagá con Mercado Pago, Tarjeta o aprovechá 10% OFF por transferencia bancaria.',
+        dateLabel: 'Hoy',
+        timestamp: Date.now()
+      }
+    ];
+  }
+
+  function loadNotifications() {
+    const parsed = loadJson(NOTIFS_STORAGE_KEY, null);
+    if (Array.isArray(parsed)) return parsed;
+    return buildDefaultNotifications();
+  }
+
+  function loadReadNotifs() {
+    const parsed = loadJson(READ_NOTIFS_KEY, {});
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  }
+
   const initialCustomItems = loadCustomItems();
 
   const state = {
-    view: 'hub', // 'hub' | 'stock' | 'mujer' | 'hombre' | 'impresion3d' | 'comida' | 'objetos'
+    view: 'hub', // 'hub' | 'stock' | 'notificaciones' | 'mujer' | 'hombre' | 'impresion3d' | 'comida' | 'objetos'
     viewport: 'desktop',
     clientMode: false,
     hubSearch: '',
@@ -97,6 +124,14 @@
     priceOverrides: loadPrices(),
     stock: loadStock(initialCustomItems),
     sales: loadSales(),
+    notifications: loadNotifications(),
+    readNotifs: loadReadNotifs(),
+    notifDraft: {
+      target: 'all',
+      type: 'Oferta',
+      title: '',
+      body: ''
+    },
     carts: {
       mujer: [],
       hombre: [],
@@ -142,6 +177,7 @@
   const modalContent = document.getElementById('modal-content');
   const modalClose = document.getElementById('modal-close');
 
+  const pushContainer = document.getElementById('push-container');
   const toastContainer = document.getElementById('toast-container');
 
   function getSection(id) {
@@ -241,12 +277,29 @@
 
   function setItemStock(itemId, newQty) {
     if (!isTrackedItem(itemId)) return;
+    const prev = state.stock[itemId];
     const clamped = Math.max(0, Math.min(999, Math.floor(Number(newQty) || 0)));
     state.stock[itemId] = clamped;
     clampCartsToStock(itemId);
     saveJson(STOCK_STORAGE_KEY, state.stock);
     updateShellControls();
     render();
+
+    // Auto-notify clients when an out-of-stock product comes back in stock!
+    if (prev === 0 && clamped > 0) {
+      const owner = window.HUB_SECTIONS.find((s) =>
+        getSectionItems(s.id).some((i) => i.id === itemId)
+      );
+      const item = owner ? findItem(owner.id, itemId) : null;
+      if (owner && item) {
+        sendClientNotification({
+          target: owner.id,
+          type: 'Stock',
+          title: `¡Volvió el stock de ${item.name}!`,
+          body: `Ya tenemos ${clamped} unidades disponibles en ${owner.brand}.`
+        });
+      }
+    }
   }
 
   function setItemPrice(itemId, newPrice) {
@@ -351,7 +404,219 @@
     saveJson(STOCK_STORAGE_KEY, state.stock);
     saveJson(SALES_STORAGE_KEY, state.sales.slice(0, 60));
     updateShellControls();
+
+    // Auto-send order confirmation notification to the store
+    sendClientNotification({
+      target: section.id,
+      type: 'Pedido',
+      title: `Pedido #${saleRecord.code} confirmado`,
+      body: `${saleRecord.customer} · ${window.formatPrice(saleRecord.total)} (${saleRecord.payment}). ¡Gracias por tu compra!`,
+      skipPushBanner: true
+    });
+
     return saleRecord;
+  }
+
+  /* ---------- Client Notifications Engine (Native Browser + In-App Push + Bell Inbox) ---------- */
+  function getNotificationsForStore(sectionId) {
+    return state.notifications.filter((n) => n.target === 'all' || n.target === sectionId);
+  }
+
+  function getUnreadCount(sectionId) {
+    return getNotificationsForStore(sectionId).filter((n) => !state.readNotifs[sectionId + ':' + n.id]).length;
+  }
+
+  function markStoreNotifsRead(sectionId) {
+    getNotificationsForStore(sectionId).forEach((n) => {
+      state.readNotifs[sectionId + ':' + n.id] = true;
+    });
+    saveJson(READ_NOTIFS_KEY, state.readNotifs);
+  }
+
+  function showPushBanner(notif) {
+    if (!pushContainer) return;
+    const sec = notif.target === 'all' ? null : getSection(notif.target);
+    const brandLabel = sec ? sec.brand : 'MI CENTRO';
+    const iconMap = { Oferta: '🔥', Stock: '📦', Novedad: '✨', Pedido: '🛍️' };
+    const icon = iconMap[notif.type] || '🔔';
+
+    const card = document.createElement('div');
+    card.className = 'push-card';
+    card.innerHTML = `
+      <div class="push-icon">${icon}</div>
+      <div class="push-content">
+        <div class="push-meta">
+          <span>${brandLabel} · ${notif.type}</span>
+          <span>Ahora</span>
+        </div>
+        <div class="push-title">${notif.title}</div>
+        <p class="push-body">${notif.body}</p>
+      </div>
+      <button class="push-close" aria-label="Cerrar notificación">&times;</button>
+    `;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.push-close')) {
+        card.remove();
+        return;
+      }
+      if (sec) navigateTo(sec.id, state.viewport);
+      card.remove();
+    });
+
+    pushContainer.appendChild(card);
+    setTimeout(() => {
+      if (!card.isConnected) return;
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(20px)';
+      card.style.transition = 'all 0.25s ease';
+      setTimeout(() => card.remove(), 260);
+    }, 5500);
+  }
+
+  function fireNativeNotification(notif) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const sec = notif.target === 'all' ? null : getSection(notif.target);
+    const prefix = sec ? `${sec.brand}: ` : 'Mi Centro: ';
+    try {
+      const nativeNotif = new Notification(prefix + notif.title, {
+        body: notif.body,
+        icon: sec ? sec.heroImage : 'assets/hero-mujer.jpg'
+      });
+      nativeNotif.onclick = () => {
+        window.focus();
+        if (sec) navigateTo(sec.id, state.viewport);
+        nativeNotif.close();
+      };
+    } catch {
+      // Some browser contexts disallow direct Notification constructor
+    }
+  }
+
+  function sendClientNotification({ target, type, title, body, skipPushBanner }) {
+    const now = new Date();
+    const dateLabel = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    const notif = {
+      id: 'notif_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      target: target || 'all',
+      type: type || 'Novedad',
+      title: (title || '').trim(),
+      body: (body || '').trim(),
+      dateLabel,
+      timestamp: Date.now()
+    };
+    if (!notif.title || !notif.body) return null;
+
+    state.notifications.unshift(notif);
+    state.notifications = state.notifications.slice(0, 40);
+    saveJson(NOTIFS_STORAGE_KEY, state.notifications);
+
+    fireNativeNotification(notif);
+    if (!skipPushBanner) {
+      showPushBanner(notif);
+    }
+    return notif;
+  }
+
+  function requestBrowserNotifPermission(callback) {
+    if (typeof Notification === 'undefined') {
+      showToast('Este navegador usa alertas internas dentro de la página');
+      return;
+    }
+    Notification.requestPermission().then((result) => {
+      if (result === 'granted') {
+        showToast('¡Notificaciones activadas en este dispositivo!');
+        fireNativeNotification({
+          target: state.view !== 'hub' && state.view !== 'stock' && state.view !== 'notificaciones' ? state.view : 'all',
+          type: 'Novedad',
+          title: '¡Alertas activadas!',
+          body: 'Ahora vas a recibir ofertas, reposiciones de stock y avisos de tus pedidos.'
+        });
+      } else if (result === 'denied') {
+        showToast('Notificaciones bloqueadas por el navegador (siguen activas dentro de la web)');
+      }
+      render();
+      if (typeof callback === 'function') callback();
+    });
+  }
+
+  function openStoreNotifsModal(sectionId) {
+    const section = getSection(sectionId);
+    if (!section) return;
+    state.modalItem = null;
+    markStoreNotifsRead(sectionId);
+    render();
+
+    const list = getNotificationsForStore(sectionId);
+    const perm = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+
+    modalContent.innerHTML = `
+      <div class="about-modal-wrap">
+        <div>
+          <span class="modal-tag">Centro de Avisos · ${section.brand}</span>
+          <h3 class="modal-title" style="margin-bottom:4px;">Notificaciones</h3>
+          <p class="modal-desc" style="margin-bottom:0;">
+            Enterate al instante de ofertas, reposiciones de stock y el estado de tus pedidos.
+          </p>
+        </div>
+
+        <div class="notif-perm-bar ${perm === 'granted' ? 'is-granted' : perm === 'denied' ? 'is-denied' : ''}" style="margin-bottom:0;">
+          <div>
+            <strong style="font-size:0.86rem;display:block;">
+              ${
+                perm === 'granted'
+                  ? '✓ Alertas activas en tu dispositivo'
+                  : perm === 'denied'
+                  ? 'Alertas bloqueadas en el navegador'
+                  : '¿Querés recibir alertas en tu celular o PC?'
+              }
+            </strong>
+            <span style="font-size:0.76rem;color:#55544f;">
+              ${
+                perm === 'granted'
+                  ? 'Te avisaremos apenas haya ofertas o vuelva el stock.'
+                  : 'Activá las notificaciones con un toque.'
+              }
+            </span>
+          </div>
+          ${
+            perm === 'default'
+              ? '<button class="stock-btn stock-btn-primary" id="btn-modal-enable-notifs">🔔 Activar</button>'
+              : ''
+          }
+        </div>
+
+        ${
+          list.length === 0
+            ? '<p style="text-align:center;padding:28px 12px;color:#64635e;font-size:0.86rem;">No tenés notificaciones nuevas en esta tienda.</p>'
+            : `<div class="notif-list" style="max-height:340px;">
+                ${list
+                  .map((n) => {
+                    const typeCls = 't-' + (n.type || 'novedad').toLowerCase();
+                    return `
+                      <article class="notif-item">
+                        <div class="notif-item-top">
+                          <span class="notif-type-tag ${typeCls}">${n.type}</span>
+                          <span>${n.dateLabel}</span>
+                        </div>
+                        <h4>${n.title}</h4>
+                        <p style="margin-bottom:0;">${n.body}</p>
+                      </article>
+                    `;
+                  })
+                  .join('')}
+              </div>`
+        }
+      </div>
+    `;
+    modalBackdrop.hidden = false;
+
+    const enableBtn = document.getElementById('btn-modal-enable-notifs');
+    if (enableBtn) {
+      enableBtn.addEventListener('click', () => {
+        requestBrowserNotifPermission(() => openStoreNotifsModal(sectionId));
+      });
+    }
   }
 
   function refundSale(saleId) {
@@ -379,7 +644,8 @@
     getInCart,
     getAvailable,
     getSectionStockSummary,
-    getGlobalStockSummary
+    getGlobalStockSummary,
+    getUnreadCount
   };
 
   function showToast(message) {
@@ -396,7 +662,8 @@
   }
 
   function setClientMode(enabled) {
-    state.clientMode = !!enabled && state.view !== 'hub' && state.view !== 'stock';
+    const inStore = state.view !== 'hub' && state.view !== 'stock' && state.view !== 'notificaciones';
+    state.clientMode = !!enabled && inStore;
     document.body.classList.toggle('is-client-mode', state.clientMode);
     clientModeDock.hidden = !state.clientMode;
     updateShellControls();
@@ -404,19 +671,23 @@
   }
 
   function navigateTo(sectionId, viewportOverride, productId) {
-    const valid = sectionId === 'hub' || sectionId === 'stock' || !!getSection(sectionId);
+    const valid =
+      sectionId === 'hub' ||
+      sectionId === 'stock' ||
+      sectionId === 'notificaciones' ||
+      !!getSection(sectionId);
     state.view = valid ? sectionId : 'hub';
     state.activeProductId = productId && getSection(state.view) ? productId : null;
     state.pdpOptionIdx = 0;
     state.pdpQty = 1;
-    if (state.view === 'hub' || state.view === 'stock') {
+    if (state.view === 'hub' || state.view === 'stock' || state.view === 'notificaciones') {
       state.clientMode = false;
       document.body.classList.remove('is-client-mode');
       clientModeDock.hidden = true;
     }
     if (viewportOverride) {
       state.viewport = viewportOverride;
-    } else if (state.view === 'hub' || state.view === 'stock') {
+    } else if (state.view === 'hub' || state.view === 'stock' || state.view === 'notificaciones') {
       state.viewport = 'desktop';
     }
     const targetHash = state.activeProductId
@@ -455,7 +726,8 @@
       navStockAlert.classList.toggle('is-critical', summary.outCount > 0);
     }
 
-    const inTemplate = state.view !== 'hub' && state.view !== 'stock';
+    const inTemplate =
+      state.view !== 'hub' && state.view !== 'stock' && state.view !== 'notificaciones';
     vpSwitcherEl.hidden = !inTemplate;
     btnClientMode.hidden = !inTemplate;
     btnBackHub.hidden = state.view === 'hub';
@@ -477,10 +749,44 @@
     } else if (state.view === 'stock') {
       rootEl.innerHTML = window.renderStockView(state, stockHelpers);
       bindStockInputs();
+    } else if (state.view === 'notificaciones') {
+      rootEl.innerHTML = window.renderNotificationsView(state, stockHelpers);
+      bindNotificationsInputs();
     } else {
       const section = getSection(state.view);
       rootEl.innerHTML = window.renderTemplateView(section, state, stockHelpers);
       bindTemplateInputs();
+    }
+  }
+
+  function bindNotificationsInputs() {
+    const form = document.getElementById('notif-send-form');
+    const targetEl = document.getElementById('nf-target');
+    const typeEl = document.getElementById('nf-type');
+    const titleEl = document.getElementById('nf-title');
+    const bodyEl = document.getElementById('nf-body');
+
+    if (targetEl) targetEl.addEventListener('change', (e) => (state.notifDraft.target = e.target.value));
+    if (typeEl) typeEl.addEventListener('change', (e) => (state.notifDraft.type = e.target.value));
+    if (titleEl) titleEl.addEventListener('input', (e) => (state.notifDraft.title = e.target.value));
+    if (bodyEl) bodyEl.addEventListener('input', (e) => (state.notifDraft.body = e.target.value));
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const sent = sendClientNotification({
+          target: targetEl.value,
+          type: typeEl.value,
+          title: titleEl.value,
+          body: bodyEl.value
+        });
+        if (sent) {
+          state.notifDraft.title = '';
+          state.notifDraft.body = '';
+          render();
+          showToast('Notificación enviada a los clientes');
+        }
+      });
     }
   }
 
@@ -973,6 +1279,24 @@
 
   /* ---------- Cross-Tab Automatic Sync ---------- */
   window.addEventListener('storage', (e) => {
+    if (e.key === NOTIFS_STORAGE_KEY) {
+      const prevTopId = state.notifications[0] && state.notifications[0].id;
+      state.notifications = loadNotifications();
+      const newest = state.notifications[0];
+      if (newest && newest.id !== prevTopId) {
+        if (
+          newest.target === 'all' ||
+          newest.target === state.view ||
+          state.view === 'hub' ||
+          state.view === 'notificaciones'
+        ) {
+          showPushBanner(newest);
+        }
+      }
+      render();
+      return;
+    }
+
     if (
       e.key === STOCK_STORAGE_KEY ||
       e.key === SALES_STORAGE_KEY ||
@@ -1027,6 +1351,61 @@
   }
 
   rootEl.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-request-notif-perm')) {
+      requestBrowserNotifPermission();
+      return;
+    }
+
+    const presetBtn = e.target.closest('[data-notif-preset]');
+    if (presetBtn) {
+      const p = window.NOTIF_PRESETS[Number(presetBtn.dataset.notifPreset)];
+      if (p) {
+        state.notifDraft.type = p.type;
+        state.notifDraft.title = p.title;
+        state.notifDraft.body = p.body;
+        render();
+      }
+      return;
+    }
+
+    const resendBtn = e.target.closest('[data-resend-notif]');
+    if (resendBtn) {
+      const found = state.notifications.find((n) => n.id === resendBtn.dataset.resendNotif);
+      if (found) {
+        sendClientNotification({
+          target: found.target,
+          type: found.type,
+          title: found.title,
+          body: found.body
+        });
+        render();
+        showToast('Notificación reenviada');
+      }
+      return;
+    }
+
+    const delNotifBtn = e.target.closest('[data-delete-notif]');
+    if (delNotifBtn) {
+      state.notifications = state.notifications.filter((n) => n.id !== delNotifBtn.dataset.deleteNotif);
+      saveJson(NOTIFS_STORAGE_KEY, state.notifications);
+      render();
+      return;
+    }
+
+    if (e.target.closest('#btn-clear-notifs')) {
+      state.notifications = [];
+      saveJson(NOTIFS_STORAGE_KEY, state.notifications);
+      render();
+      showToast('Historial de notificaciones limpiado');
+      return;
+    }
+
+    const openStoreNotifs = e.target.closest('[data-open-store-notifs]');
+    if (openStoreNotifs) {
+      openStoreNotifsModal(openStoreNotifs.dataset.openStoreNotifs);
+      return;
+    }
+
     if (e.target.closest('#btn-open-new-product')) {
       openNewProductModal();
       return;
@@ -1462,7 +1841,8 @@
   function syncFromHash() {
     const raw = window.location.hash.replace(/^#/, '');
     const [sec, prodId] = raw.split('/');
-    const valid = sec === 'hub' || sec === 'stock' || !!getSection(sec);
+    const valid =
+      sec === 'hub' || sec === 'stock' || sec === 'notificaciones' || !!getSection(sec);
     state.view = valid ? sec : 'hub';
     state.activeProductId = prodId && findItem(state.view, prodId) ? prodId : null;
     state.pdpOptionIdx = 0;
