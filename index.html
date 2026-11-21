@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Centro Web — Hub de Modelos de Páginas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/hub.css" />
+  <link rel="stylesheet" href="css/templates.css" />
+</head>
+<body>
+  <!-- Persistent Top Hub Shell -->
+  <header class="hub-bar" id="hub-bar">
+    <div class="hub-bar-inner">
+      <button class="hub-brand" id="btn-go-hub" title="Volver al Centro">
+        <span class="hub-brand-mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+          </svg>
+        </span>
+        <span class="hub-brand-text">
+          <strong>Mi Centro</strong>
+          <small>Panel de páginas</small>
+        </span>
+      </button>
+
+      <nav class="hub-nav" id="hub-nav" aria-label="Secciones de páginas">
+        <button class="hub-nav-pill is-active" data-section="hub">
+          <span>Todo</span>
+        </button>
+        <button class="hub-nav-pill" data-section="mujer">
+          <span class="pill-dot" style="background:#C27862"></span>
+          <span>Ropa Mujer</span>
+        </button>
+        <button class="hub-nav-pill" data-section="hombre">
+          <span class="pill-dot" style="background:#3B4654"></span>
+          <span>Ropa Hombre</span>
+        </button>
+        <button class="hub-nav-pill" data-section="impresion3d">
+          <span class="pill-dot" style="background:#22D3EE"></span>
+          <span>Impresiones 3D</span>
+        </button>
+        <button class="hub-nav-pill" data-section="comida">
+          <span class="pill-dot" style="background:#C2410C"></span>
+          <span>Menú Comida</span>
+        </button>
+        <button class="hub-nav-pill" data-section="objetos">
+          <span class="pill-dot" style="background:#6B7B6E"></span>
+          <span>Objetos</span>
+        </button>
+        <span class="hub-nav-divider" aria-hidden="true"></span>
+        <button class="hub-nav-pill hub-nav-stock" data-section="stock" id="nav-stock-pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span>Stock</span>
+          <span class="nav-stock-alert" id="nav-stock-alert" hidden>0</span>
+        </button>
+      </nav>
+
+      <div class="hub-controls" id="hub-controls">
+        <div class="viewport-switcher" id="viewport-switcher" hidden aria-label="Tamaño de vista previa">
+          <button class="vp-btn is-active" data-vp="desktop" title="Vista Escritorio">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </button>
+          <button class="vp-btn" data-vp="tablet" title="Vista Tablet">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          </button>
+          <button class="vp-btn" data-vp="mobile" title="Vista Móvil">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          </button>
+        </div>
+        <button class="hub-client-btn" id="btn-client-mode" hidden title="Ocultar barra del Centro para mostrar al cliente">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Vista Cliente</span>
+        </button>
+        <button class="hub-back-btn" id="btn-back-hub" hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <span>Centro</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Floating Dock for Client Fullscreen Mode (with Desktop / Tablet / Mobile switcher) -->
+  <div class="client-mode-dock" id="client-mode-dock" hidden>
+    <div class="client-vp-group" id="client-vp-switcher" aria-label="Cambiar vista dispositivo">
+      <button class="client-vp-btn is-active" data-vp="desktop" title="Vista Compu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span>Compu</span>
+      </button>
+      <button class="client-vp-btn" data-vp="tablet" title="Vista Tablet">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span>Tablet</span>
+      </button>
+      <button class="client-vp-btn" data-vp="mobile" title="Vista Celu">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span>Celu</span>
+      </button>
+    </div>
+    <span class="client-dock-sep" aria-hidden="true"></span>
+    <button class="exit-client-btn" id="btn-exit-client-mode" title="Volver a la barra del Centro (Esc)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span>Salir</span>
+    </button>
+  </div>
+
+  <!-- Main Workspace -->
+  <main id="app-root" class="app-root">
+    <!-- Rendered dynamically by js/app.js -->
+  </main>
+
+  <!-- Shared Slide-over Cart / Order Drawer -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="cart-drawer" id="cart-drawer" aria-hidden="true">
+    <div class="cart-drawer-header">
+      <div>
+        <h3 id="drawer-title">Tu Carrito</h3>
+        <p id="drawer-subtitle" class="drawer-subtitle"></p>
+      </div>
+      <button class="icon-close-btn" id="drawer-close" aria-label="Cerrar panel">&times;</button>
+    </div>
+    <div class="cart-drawer-body" id="drawer-body"></div>
+    <div class="cart-drawer-footer" id="drawer-footer"></div>
+  </aside>
+
+  <!-- Quick View Product Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal-card" id="modal-card" role="dialog" aria-modal="true">
+      <button class="icon-close-btn modal-close" id="modal-close" aria-label="Cerrar vista rápida">&times;</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/artwork.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
