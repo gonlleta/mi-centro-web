@@ -733,24 +733,6 @@ body.is-client-mode .template-viewport-outer {
   background: #2f2f2b;
 }
 
-.btn-open-mobile {
-  border: 1px solid var(--hub-border-strong);
-  background: transparent;
-  color: var(--hub-ink);
-  width: 42px;
-  height: 41px;
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.btn-open-mobile:hover {
-  background: var(--hub-bg);
-  border-color: var(--hub-ink);
-}
-
 .section-stock-summary {
   display: flex;
   align-items: center;

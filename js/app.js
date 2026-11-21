@@ -1170,12 +1170,6 @@
       return;
     }
 
-    const openMob = e.target.closest('[data-open-mobile]');
-    if (openMob) {
-      navigateTo(openMob.dataset.openMobile, 'mobile');
-      return;
-    }
-
     const catBtn = e.target.closest('[data-tpl-cat]');
     if (catBtn) {
       state.activeCategory[state.view] = catBtn.dataset.tplCat;

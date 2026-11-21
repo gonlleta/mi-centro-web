@@ -166,9 +166,6 @@ window.renderHubView = function renderHubView(state, helpers) {
                             <span>Abrir página</span>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                           </button>
-                          <button class="btn-open-mobile" data-open-mobile="${s.id}" title="Abrir en vista móvil">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-                          </button>
                         </div>
                       </div>
                     </article>
