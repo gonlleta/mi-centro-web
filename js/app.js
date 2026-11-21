@@ -10,6 +10,7 @@
   const CUSTOM_ITEMS_KEY = 'mi_centro_custom_items_v1';
   const NOTIFS_STORAGE_KEY = 'mi_centro_notifs_v1';
   const READ_NOTIFS_KEY = 'mi_centro_read_notifs_v1';
+  const USERS_STORAGE_KEY = 'mi_centro_users_v1';
 
   const PAYMENT_METHODS = [
     'Mercado Pago',
@@ -103,6 +104,11 @@
     return parsed && typeof parsed === 'object' ? parsed : {};
   }
 
+  function loadStoreUsers() {
+    const parsed = loadJson(USERS_STORAGE_KEY, {});
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  }
+
   const initialCustomItems = loadCustomItems();
 
   const state = {
@@ -126,6 +132,8 @@
     sales: loadSales(),
     notifications: loadNotifications(),
     readNotifs: loadReadNotifs(),
+    storeUsers: loadStoreUsers(),
+    promptedStores: {},
     notifDraft: {
       target: 'all',
       type: 'Oferta',
@@ -174,6 +182,7 @@
   const drawerClose = document.getElementById('drawer-close');
 
   const modalBackdrop = document.getElementById('modal-backdrop');
+  const modalCard = document.getElementById('modal-card');
   const modalContent = document.getElementById('modal-content');
   const modalClose = document.getElementById('modal-close');
 
@@ -619,6 +628,213 @@
     }
   }
 
+  /* ---------- Store Entry Auth + Notifications Prompt ---------- */
+  function openStoreAuthModal(sectionId, mode) {
+    const section = getSection(sectionId);
+    if (!section) return;
+    state.modalItem = null;
+    state.promptedStores[sectionId] = true;
+    const existingUser = state.storeUsers[sectionId];
+    const authMode = mode || 'login';
+    const perm = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+
+    if (modalCard) modalCard.classList.add('is-compact');
+
+    if (existingUser) {
+      modalContent.innerHTML = `
+        <div class="about-modal-wrap">
+          <div class="auth-hero">
+            <img src="${section.heroImage}" alt="${section.brand}" />
+            <div class="auth-hero-overlay">
+              <span>Cuenta activa · ${section.sectionName}</span>
+              <h3>${section.brand}</h3>
+            </div>
+          </div>
+
+          <div style="padding:14px;border-radius:12px;background:#f6f6f3;border:1px solid rgba(22,22,20,0.1);">
+            <div style="font-size:0.74rem;color:#64635e;text-transform:uppercase;font-weight:600;">Sesión iniciada</div>
+            <div style="font-size:1rem;font-weight:700;margin-top:3px;">${existingUser.name || existingUser.email}</div>
+            <div style="font-size:0.82rem;color:#55544f;">${existingUser.email}</div>
+          </div>
+
+          <div class="auth-notif-box ${perm === 'granted' ? 'is-enabled' : ''}" id="auth-manage-notif">
+            <div class="auth-notif-copy">
+              <strong>🔔 Notificaciones del navegador</strong>
+              <span>${perm === 'granted' ? 'Activadas en este dispositivo' : perm === 'denied' ? 'Bloqueadas en el navegador' : 'Tocá para permitir alertas en vivo'}</span>
+            </div>
+            ${
+              perm === 'default'
+                ? '<button type="button" class="stock-mini-btn" id="btn-auth-enable-notif">Permitir</button>'
+                : perm === 'granted'
+                ? '<span class="stock-status-pill is-ok">Activas</span>'
+                : ''
+            }
+          </div>
+
+          <button class="btn-checkout" id="btn-auth-logout" style="background:#b91c1c;">
+            Cerrar sesión (volver a mostrar acceso)
+          </button>
+        </div>
+      `;
+      modalBackdrop.hidden = false;
+
+      const enableBtn = document.getElementById('btn-auth-enable-notif');
+      if (enableBtn) {
+        enableBtn.addEventListener('click', () => {
+          requestBrowserNotifPermission(() => openStoreAuthModal(sectionId));
+        });
+      }
+      const logoutBtn = document.getElementById('btn-auth-logout');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+          delete state.storeUsers[sectionId];
+          delete state.promptedStores[sectionId];
+          saveJson(USERS_STORAGE_KEY, state.storeUsers);
+          render();
+          openStoreAuthModal(sectionId, 'login');
+          showToast('Sesión cerrada');
+        });
+      }
+      return;
+    }
+
+    modalContent.innerHTML = `
+      <div>
+        <div class="auth-hero">
+          <img src="${section.heroImage}" alt="${section.brand}" />
+          <div class="auth-hero-overlay">
+            <span>Bienvenido a ${section.sectionName}</span>
+            <h3>${section.brand}</h3>
+          </div>
+        </div>
+
+        <div class="auth-mode-tabs">
+          <button type="button" class="auth-mode-tab ${authMode === 'login' ? 'is-active' : ''}" data-auth-tab="login">Iniciar sesión</button>
+          <button type="button" class="auth-mode-tab ${authMode === 'register' ? 'is-active' : ''}" data-auth-tab="register">Crear cuenta</button>
+        </div>
+
+        <form class="new-prod-form" id="store-auth-form">
+          ${
+            authMode === 'register'
+              ? `
+            <div class="form-field">
+              <label for="auth-name">Tu nombre</label>
+              <input id="auth-name" type="text" required placeholder="Ej: Gonzalo" />
+            </div>`
+              : ''
+          }
+          <div class="form-field">
+            <label for="auth-email">Correo electrónico</label>
+            <input id="auth-email" type="email" required placeholder="tu.correo@gmail.com" autocomplete="email" />
+          </div>
+          <div class="form-field">
+            <label for="auth-password">Contraseña</label>
+            <div class="auth-pass-wrap">
+              <input id="auth-password" type="password" required minlength="4" placeholder="••••••••" autocomplete="current-password" style="padding-right:64px;" />
+              <button type="button" class="auth-pass-toggle" id="btn-toggle-pass">Ver</button>
+            </div>
+          </div>
+
+          <label class="auth-notif-box is-enabled" id="auth-notif-label">
+            <div class="auth-notif-copy">
+              <strong>🔔 Permitir notificaciones</strong>
+              <span>${
+                perm === 'granted'
+                  ? 'Ya tenés activadas las alertas en este dispositivo'
+                  : 'Recibí ofertas exclusivas, stock y avisos de tus pedidos'
+              }</span>
+            </div>
+            <input type="checkbox" class="auth-switch" id="auth-allow-notifs" checked />
+          </label>
+
+          <button type="submit" class="btn-checkout">
+            ${authMode === 'register' ? 'Crear cuenta e ingresar' : 'Ingresar'}
+          </button>
+          <button type="button" class="auth-guest-btn" id="btn-auth-guest">
+            Continuar sin cuenta por ahora
+          </button>
+        </form>
+      </div>
+    `;
+
+    modalBackdrop.hidden = false;
+
+    modalContent.querySelectorAll('[data-auth-tab]').forEach((tab) => {
+      tab.addEventListener('click', () => openStoreAuthModal(sectionId, tab.dataset.authTab));
+    });
+
+    const passInput = document.getElementById('auth-password');
+    const togglePass = document.getElementById('btn-toggle-pass');
+    if (passInput && togglePass) {
+      togglePass.addEventListener('click', () => {
+        const show = passInput.type === 'password';
+        passInput.type = show ? 'text' : 'password';
+        togglePass.textContent = show ? 'Ocultar' : 'Ver';
+      });
+    }
+
+    const notifCheckbox = document.getElementById('auth-allow-notifs');
+    const notifLabel = document.getElementById('auth-notif-label');
+    if (notifCheckbox && notifLabel) {
+      notifCheckbox.addEventListener('change', () => {
+        notifLabel.classList.toggle('is-enabled', notifCheckbox.checked);
+      });
+    }
+
+    const guestBtn = document.getElementById('btn-auth-guest');
+    if (guestBtn) {
+      guestBtn.addEventListener('click', () => {
+        if (notifCheckbox && notifCheckbox.checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          requestBrowserNotifPermission();
+        }
+        closeQuickView();
+      });
+    }
+
+    const form = document.getElementById('store-auth-form');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('auth-email').value.trim();
+        const nameEl = document.getElementById('auth-name');
+        const name = nameEl ? nameEl.value.trim() : email.split('@')[0];
+        const wantsNotifs = notifCheckbox && notifCheckbox.checked;
+
+        state.storeUsers[sectionId] = {
+          email,
+          name,
+          notificationsEnabled: !!wantsNotifs,
+          signedInAt: Date.now()
+        };
+        saveJson(USERS_STORAGE_KEY, state.storeUsers);
+
+        closeQuickView();
+        render();
+
+        if (wantsNotifs && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          requestBrowserNotifPermission();
+        }
+
+        sendClientNotification({
+          target: sectionId,
+          type: 'Novedad',
+          title: `¡Bienvenido, ${name}!`,
+          body: `Ingresaste a ${section.brand} con ${email}. ${wantsNotifs ? 'Notificaciones activadas.' : ''}`
+        });
+      });
+    }
+  }
+
+  function maybePromptStoreEntry(sectionId) {
+    if (!getSection(sectionId)) return;
+    if (state.storeUsers[sectionId] || state.promptedStores[sectionId]) return;
+    setTimeout(() => {
+      if (state.view === sectionId && modalBackdrop.hidden) {
+        openStoreAuthModal(sectionId, 'login');
+      }
+    }, 180);
+  }
+
   function refundSale(saleId) {
     const idx = state.sales.findIndex((s) => s.id === saleId);
     if (idx === -1) return;
@@ -668,6 +884,7 @@
     clientModeDock.hidden = !state.clientMode;
     updateShellControls();
     render();
+    maybePromptStoreEntry(state.view);
   }
 
   function navigateTo(sectionId, viewportOverride, productId) {
@@ -699,6 +916,7 @@
     updateShellControls();
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    maybePromptStoreEntry(state.view);
   }
 
   function openProductPage(sectionId, itemId) {
@@ -1016,12 +1234,16 @@
       })
       .join('');
 
+    const signedUser = state.storeUsers[sectionId];
+    const defaultCustomer = signedUser ? signedUser.name || signedUser.email : '';
+
     drawerFooter.innerHTML = `
       <div class="checkout-form">
         <input
           type="text"
           id="checkout-customer"
           class="checkout-input"
+          value="${defaultCustomer.replace(/"/g, '&quot;')}"
           placeholder="${sectionId === 'comida' ? 'Mesa o nombre...' : 'Nombre del cliente...'}"
         />
         <select id="checkout-payment" class="checkout-select" aria-label="Forma de pago">
@@ -1274,6 +1496,7 @@
 
   function closeQuickView() {
     modalBackdrop.hidden = true;
+    if (modalCard) modalCard.classList.remove('is-compact');
     state.modalItem = null;
   }
 
@@ -1338,6 +1561,7 @@
     state.viewport = btn.dataset.vp;
     updateShellControls();
     render();
+    maybePromptStoreEntry(state.view);
   });
 
   if (clientVpSwitcher) {
@@ -1403,6 +1627,12 @@
     const openStoreNotifs = e.target.closest('[data-open-store-notifs]');
     if (openStoreNotifs) {
       openStoreNotifsModal(openStoreNotifs.dataset.openStoreNotifs);
+      return;
+    }
+
+    const openAuth = e.target.closest('[data-open-auth]');
+    if (openAuth) {
+      openStoreAuthModal(openAuth.dataset.openAuth, 'login');
       return;
     }
 
@@ -1849,6 +2079,7 @@
     state.pdpQty = 1;
     updateShellControls();
     render();
+    maybePromptStoreEntry(state.view);
   }
 
   window.addEventListener('hashchange', syncFromHash);

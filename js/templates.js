@@ -799,6 +799,10 @@ window.renderTemplateView = function renderTemplateView(section, state, helpers)
     : null;
 
   const unreadCount = helpers.getUnreadCount(section.id);
+  const storeUser = state.storeUsers[section.id] || null;
+  const userShortLabel = storeUser
+    ? storeUser.name || storeUser.email.split('@')[0]
+    : 'Ingresar';
 
   const headerInner = `
     <div class="tpl-container">
@@ -812,6 +816,10 @@ window.renderTemplateView = function renderTemplateView(section, state, helpers)
         </div>
         <div class="tpl-header-actions">
           <button class="tpl-mobile-about-btn" data-scroll-info>Nosotros</button>
+          <button class="tpl-user-btn" data-open-auth="${section.id}" title="${storeUser ? 'Cuenta: ' + storeUser.email : 'Iniciar sesión y notificaciones'}">
+            <span aria-hidden="true">👤</span>
+            <span>${userShortLabel}</span>
+          </button>
           <button class="tpl-bell-btn" data-open-store-notifs="${section.id}" title="Notificaciones y alertas de ${section.brand}" aria-label="Notificaciones">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             ${unreadCount > 0 ? `<span class="tpl-bell-badge">${unreadCount}</span>` : ''}
